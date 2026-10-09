@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProstoRP — Загрузка города</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #0a0a0c;
+            color: #d8d4d2;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* === СЛОЙ ФОНОВ (7 штук, смена каждые 5 сек) === */
+        .bg-stack {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .bg-layer {
+            position: absolute;
+            inset: 0;
+            background: center/cover no-repeat;
+            filter: grayscale(0.35) contrast(0.95) brightness(0.55);
+            opacity: 0;
+            transition: opacity 1.4s ease-in-out;
+            will-change: opacity;
+            transform: translateZ(0);
+        }
+
+        .bg-layer.active {
+            opacity: 1;
+        }
+
+        .bg-overlay {
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(180deg, rgba(10,10,12,0.78) 0%, rgba(10,10,12,0.6) 45%, rgba(10,10,12,0.92) 100%),
+                radial-gradient(ellipse 70% 60% at 50% 40%, rgba(160, 30, 30, 0.1), transparent 70%);
+            pointer-events: none;
+        }
+
+        /* === ВЕРХНЯЯ ПОЛОСА === */
+        .topbar {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 40px;
+            font-size: 0.78rem;
+            letter-spacing: 0.5px;
+            color: #8a8480;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            backdrop-filter: blur(10px);
+            background: rgba(10,10,12,0.4);
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+        }
+
+        .topbar-brand {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #f0eae6;
+            letter-spacing: 0.3px;
+        }
+
+        .topbar-brand span {
+            color: #c93838;
+        }
+
+        .topbar-divider {
+            width: 1px;
+            height: 16px;
+            background: rgba(255,255,255,0.12);
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+        }
+
+        .topbar-right .ip {
+            color: #b8b2ad;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .topbar-right .clock {
+            color: #f0eae6;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 1px;
+            min-width: 78px;
+            text-align: right;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 4px 11px 4px 9px;
+            background: rgba(201, 56, 56, 0.1);
+            border: 1px solid rgba(201, 56, 56, 0.28);
+            border-radius: 100px;
+            color: #e0a5a5;
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .status-pill .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #d94646;
+            animation: pulseDot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulseDot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* === ОСНОВНАЯ СЦЕНА === */
+        .stage {
+            position: relative;
+            z-index: 5;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            min-height: 0;
+        }
+
+        .content {
+            width: 100%;
+            max-width: 640px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        /* Логотип — картинка */
+        .logo {
+            width: 192px;
+            height: 192px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* === ГЛАВНЫЙ ЗАГОЛОВОК — Oswald === */
+        .title {
+            font-family: 'Oswald', sans-serif;
+            font-weight: 700;
+            font-size: clamp(3rem, 8vw, 5.6rem);
+            line-height: 0.95;
+            letter-spacing: 12px;
+            text-transform: uppercase;
+            color: #f5f0ec;
+            margin-bottom: 14px;
+        }
+
+        .title .accent {
+            color: #c93838;
+        }
+
+        .subtitle {
+            font-size: 0.82rem;
+            font-weight: 400;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #8a8480;
+            margin-bottom: 42px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            justify-content: center;
+        }
+
+        .subtitle::before,
+        .subtitle::after {
+            content: "";
+            width: 44px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(201,56,56,0.7), transparent);
+        }
+
+        /* === БЛОК СОВЕТОВ === */
+        .notice {
+            width: 100%;
+            background: rgba(20, 18, 20, 0.55);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-left: 3px solid #c93838;
+            padding: 22px 26px 24px;
+            border-radius: 2px;
+            text-align: left;
+            backdrop-filter: blur(12px);
+            margin-bottom: 34px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+        }
+
+        .notice-label {
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #c93838;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .notice-label::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(201,56,56,0.35), transparent);
+        }
+
+        .notice-text {
+            font-size: 0.98rem;
+            line-height: 1.6;
+            color: #d0cbc6;
+            font-weight: 300;
+            min-height: 3.2em;
+            transition: opacity 0.4s ease;
+        }
+
+        .notice-text.fade {
+            opacity: 0;
+        }
+
+        /* === ПРОГРЕСС === */
+        .progress-block {
+            width: 100%;
+        }
+
+        .progress-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 12px;
+            font-size: 0.8rem;
+        }
+
+        .progress-status {
+            color: #8a8480;
+            font-weight: 400;
+            letter-spacing: 0.3px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 75%;
+            text-align: left;
+        }
+
+        .progress-percent {
+            color: #f0eae6;
+            font-family: 'Oswald', sans-serif;
+            font-weight: 600;
+            font-size: 1.15rem;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 1px;
+        }
+
+        .bar-track {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 100px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #8a1a1a, #c93838);
+            border-radius: 100px;
+            transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        /* === НИЖНЯЯ СТРОКА === */
+        .footer {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 40px;
+            font-size: 0.72rem;
+            letter-spacing: 0.8px;
+            color: #6a6560;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            backdrop-filter: blur(10px);
+            background: rgba(10,10,12,0.4);
+        }
+
+        .footer-left {
+            display: flex;
+            gap: 22px;
+        }
+
+        .footer-left span {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .footer-left .k {
+            color: #55504c;
+        }
+
+        .footer-left .v {
+            color: #b8b2ad;
+            font-weight: 500;
+        }
+
+        .footer-right {
+            color: #6a6560;
+            font-style: italic;
+            font-family: 'Playfair Display', serif;
+            font-size: 0.85rem;
+        }
+
+        /* Адаптив */
+        @media (max-width: 640px) {
+            .topbar, .footer { padding: 14px 18px; }
+            .stage { padding: 24px; }
+            .topbar-left { gap: 12px; }
+            .topbar-right { gap: 12px; }
+            .topbar-divider { display: none; }
+            .topbar-left .hide-sm, .topbar-right .hide-sm { display: none; }
+            .notice { padding: 18px 20px; }
+            .notice-text { font-size: 0.9rem; }
+            .footer-left { gap: 14px; }
+            .footer-right { display: none; }
+            .title { letter-spacing: 6px; }
+            .subtitle { font-size: 0.7rem; letter-spacing: 2px; }
+            .subtitle::before, .subtitle::after { width: 24px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Стек фонов (смена каждые 5 секунд) -->
+    <div class="bg-stack">
+        <div class="bg-layer" id="bgA"></div>
+        <div class="bg-layer" id="bgB"></div>
+        <div class="bg-overlay"></div>
+    </div>
+
+    <!-- Верхняя полоса -->
+    <header class="topbar">
+        <div class="topbar-left">
+            <div class="topbar-brand">Prosto<span>RP</span></div>
+            <div class="topbar-divider"></div>
+            <div class="status-pill">
+                <span class="dot"></span>
+                <span>Онлайн</span>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <span class="hide-sm">IP: <span class="ip" id="server-ip">192.145.99.243:27016</span></span>
+            <span class="clock" id="live-clock">00:00:00</span>
+        </div>
+    </header>
+
+    <!-- Центральная сцена -->
+    <main class="stage">
+        <div class="content">
+
+            <!-- Логотип — картинка -->
+            <div class="logo">
+                <img src="logo.png" alt="ProstoRP">
+            </div>
+
+            <!-- Заголовок -->
+            <h1 class="title">PROSTO<span class="accent">RP</span></h1>
+            <div class="subtitle">Городская ролевая игра</div>
+
+            <!-- Блок совета -->
+            <div class="notice">
+                <div class="notice-label">Сводка для жителя города</div>
+                <div class="notice-text" id="notice-text">
+                    Загрузка городских новостей...
+                </div>
+            </div>
+
+            <!-- Прогресс -->
+            <div class="progress-block">
+                <div class="progress-meta">
+                    <span class="progress-status" id="status-text">Инициализация городского клиента</span>
+                    <span class="progress-percent" id="progress-percentage">0%</span>
+                </div>
+                <div class="bar-track">
+                    <div class="bar-fill" id="progress-fill"></div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Нижняя полоса -->
+    <footer class="footer">
+        <div class="footer-left">
+            <span><span class="k">РЕЖИМ</span> <span class="v">DarkRP</span></span>
+            <span><span class="k">КАРТА</span> <span class="v" id="map-name">rp_city24</span></span>
+            <span class="hide-sm"><span class="k">СЛОТЫ</span> <span class="v" id="slots">0 / 100</span></span>
+        </div>
+        <div class="footer-right">Добро пожаловать в город</div>
+    </footer>
+
+    <audio id="bg-music" src="music.mp3" autoplay loop></audio>
+
+    <script>
+        /* ============================================================
+           ФОНОВЫЕ ИЗОБРАЖЕНИЯ — 7 ШТУК, СМЕНА КАЖДЫЕ 5 СЕКУНД
+           Замени пути на свои файлы (bg1.jpg ... bg7.jpg) или URL.
+           ============================================================ */
+        const BACKGROUNDS = [
+            'bg1.png',
+            'bg2.png',
+            'bg3.png',
+            'bg4.png',
+            'bg5.png',
+            'bg6.png',
+            'bg7.png'
+        ];
+
+        const bgA = document.getElementById('bgA');
+        const bgB = document.getElementById('bgB');
+        let bgIdx = 0;
+        let showingA = true;
+
+        // Предзагрузка, чтобы не было вспышек при смене
+        BACKGROUNDS.forEach(url => { const im = new Image(); im.src = url; });
+
+        // Первый фон сразу
+        bgA.style.backgroundImage = `url('${BACKGROUNDS[0]}')`;
+        bgA.classList.add('active');
+
+        // Смена каждые 5 секунд
+        setInterval(() => {
+            bgIdx = (bgIdx + 1) % BACKGROUNDS.length;
+            const next = `url('${BACKGROUNDS[bgIdx]}')`;
+
+            if (showingA) {
+                bgB.style.backgroundImage = next;
+                bgB.classList.add('active');
+                bgA.classList.remove('active');
+            } else {
+                bgA.style.backgroundImage = next;
+                bgA.classList.add('active');
+                bgB.classList.remove('active');
+            }
+            showingA = !showingA;
+        }, 5000);
+
+        // Громкость музыки
+        const bgMusic = document.getElementById('bg-music');
+        if (bgMusic) bgMusic.volume = 0.22;
+
+        // Тихий эмбиент
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AC();
+            const bufferSize = 2 * ctx.sampleRate;
+            const buf = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buf.getChannelData(0);
+            let last = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                const w = Math.random() * 2 - 1;
+                data[i] = (last + 0.02 * w) / 1.02;
+                last = data[i];
+                data[i] *= 0.12;
+            }
+            const noise = ctx.createBufferSource();
+            noise.buffer = buf;
+            noise.loop = true;
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 150;
+            const gain = ctx.createGain();
+            gain.gain.value = 0.04;
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            window.addEventListener('click', () => {
+                if (ctx.state === 'suspended') ctx.resume();
+            }, { once: true });
+            noise.start(0);
+        } catch (e) {}
+
+        // Часы
+        function tick() {
+            const d = new Date();
+            const p = n => String(n).padStart(2, '0');
+            document.getElementById('live-clock').innerText =
+                `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        }
+        setInterval(tick, 1000);
+        tick();
+
+        // Сводки города
+        const notices = [
+            'Уважайте отыгрыш других жителей. RDM и беспричинное насилие караются администрацией города.',
+            'Убийство допускается только при весомой ролевой причине. Держите КОС-лист на базе в открытом доступе.',
+            'После смерти персонаж забывает обстоятельства гибели. Не мстите сразу после возрождения.',
+            'Информация из Discord и стримов не должна влиять на ваши действия в игре — метагейм запрещён.',
+            'Мэр обязан издавать адекватные законы. Злоупотребление полномочиями рассматривает городской совет.',
+            'Оружие и наркотики продаются только в специальных зонах. Уличная торговля — рискованное дело.',
+            'Полиция существует не для DM. Аресты, переговоры и погони — вот настоящий отыгрыш.',
+            'Создайте уникального персонажа: имя, биография, характер. Это делает город живым.'
+        ];
+
+        let nIdx = 0;
+        const noticeEl = document.getElementById('notice-text');
+
+        function showNotice(i) { noticeEl.innerText = notices[i]; }
+
+        function nextNotice() {
+            noticeEl.classList.add('fade');
+            setTimeout(() => {
+                nIdx = (nIdx + 1) % notices.length;
+                showNotice(nIdx);
+                noticeEl.classList.remove('fade');
+            }, 400);
+        }
+
+        showNotice(0);
+        setInterval(nextNotice, 5600);
+
+        // Прогресс
+        const fillEl = document.getElementById('progress-fill');
+        const percentEl = document.getElementById('progress-percentage');
+        const statusEl = document.getElementById('status-text');
+        let totalFiles = 0;
+
+        window.GameDetails = function(servername, serverurl, mapname, maxplayers, steamid, gamemode) {
+            if (mapname) document.getElementById('map-name').innerText = mapname;
+            if (maxplayers) document.getElementById('slots').innerText = `0 / ${maxplayers}`;
+        };
+
+        window.SetStatusChanged = function(status) {
+            if (!status) return;
+            statusEl.innerText = status;
+        };
+
+        window.SetFilesTotal = function(total) { totalFiles = total; };
+
+        window.SetFilesNeeded = function(needed) {
+            if (!totalFiles) return;
+            const p = Math.max(0, Math.min(100,
+                Math.floor((1 - needed / totalFiles) * 100)
+            ));
+            fillEl.style.width = p + '%';
+            percentEl.innerText = p + '%';
+        };
+
+        // Демо-прогресс для браузера
+        if (typeof gmod === 'undefined') {
+            let demo = 0;
+            const steps = [
+                'Подключение к городскому узлу',
+                'Проверка гражданских данных',
+                'Загрузка районов города',
+                'Синхронизация профессий',
+                'Подключение к полицейской частоте',
+                'Финальная проверка допуска'
+            ];
+            const t = setInterval(() => {
+                demo += Math.random() * 3;
+                if (demo >= 100) {
+                    demo = 100;
+                    clearInterval(t);
+                    statusEl.innerText = 'Добро пожаловать в город';
+                }
+                fillEl.style.width = demo + '%';
+                percentEl.innerText = Math.floor(demo) + '%';
+                statusEl.innerText = steps[Math.min(steps.length - 1, Math.floor(demo / 17))];
+            }, 340);
+        }
+    </script>
+
+</body>
+</html>
